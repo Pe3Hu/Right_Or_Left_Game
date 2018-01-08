@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Left or Right</title>
+    <style>
+        body { margin: 0; }
+        canvas { width: 100%; height: 100% }
+    </style>
+</head>
+<body>
+<script src="../libraries/three.js-r87/build/three.min.js"></script>
+<script src="../libraries/three.js-r87/src/helpers/AxisHelper.js"> </script>
+<script src="../libraries/three.js-r87/examples/js/libs/stats.min.js"></script>
+<script src="../libraries/three.js-r87/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+
+    var Container, Stats, AxisHelper;
+    var Camera, Scene, Raycaster, Renderer;
+    var Mouse = new THREE.Vector2(), INTERSECTED;
+    var radius = 100, theta = 0;
+    var Camera_Radius = 10,  s = Math.PI /720, angle = 0, n= 50, $ = {
+        Radius : 30,
+        Speed : s
+    };
+
+    //Массив кубов
+    var Cubes = [];
+
+    init();
+    animate();
+
+    function init() {
+
+        Container = document.createElement( 'div' );
+        document.body.appendChild( Container );
+
+        Camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+        Camera.position.set(2*Camera_Radius, 2*Camera_Radius, 2*Camera_Radius);
+        Camera.lookAt(new THREE.Vector3(0,0,0));
+        Controls = new THREE.OrbitControls( Camera );
+
+        Scene = new THREE.Scene();
+        Scene.background = new THREE.Color( 0xf0f0f0 );
+        AxisHelper = new THREE.AxisHelper( 5 );
+        Scene.add( AxisHelper );
+        var Light = new THREE.DirectionalLight( 0xffffff, 1 );
+        Light.position.set( 1, 1, 1 ).normalize();
+        Scene.add( Light );
+
+
+        var Colors = [ new THREE.Color(0xF4C430),
+            new THREE.Color(0xC8A2C8),
+            new THREE.Color(0x007FFF),
+            new THREE.Color(0x3B005C),
+            new THREE.Color(0x00A86B),
+            new THREE.Color(0xDC143C)];
+        var Geometry = new THREE.BoxGeometry( 1, 1, 1 );
+        for (var i=0; i<n; i++) {
+            Cubes.push(new THREE.Mesh(Geometry, new THREE.MeshLambertMaterial( { color: Colors[i%6]   }  )
+            ));
+            Cubes[i].position.x = Math.sin (2*Math.PI/n*i)*$.Radius/2;
+            Cubes[i].position.z = Math.cos (2*Math.PI/n*i)*$.Radius/2;
+            Cubes[i].material.em
+            Scene.add(Cubes[i]);
+        }
+
+        Raycaster = new THREE.Raycaster();
+
+        Renderer = new THREE.WebGLRenderer({antialias: true});
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+        Renderer.setPixelRatio( window.devicePixelRatio );
+        Container.appendChild( Renderer.domElement );
+
+
+        Stats = new Stats();
+        Container.appendChild( Stats.dom);
+
+        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+        //document.addEventListener( 'click', onDocumentMouseClick, false );
+
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        window.addEventListener( 'keydown', onWindowKeyDown, false );
+    }
+
+    function onWindowResize() {
+        Camera.aspect = window.innerWidth / window.innerHeight;
+        Camera.updateProjectionMatrix();
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    function onWindowKeyDown( event ) {
+        event.preventDefault();
+        if (event.keyCode == 81)
+        {
+            $.Speed = s;
+        }
+        if (event.keyCode == 69)
+        {
+            $.Speed = -s;
+        }
+    }
+    function onDocumentMouseMove( event ) {
+        event.preventDefault();
+        Mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+        Mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+    }
+/*
+    function onDocumentMouseClick( event ) {
+    if (INTERSECTED instanceof  Object)
+
+        event.preventDefault();
+        Camera.position.set();
+        Camera.lookAt(new THREE.Vector3(0,0,0));
+    }*/
+
+    /*    var animate = function () {
+            requestAnimationFrame( animate );
+
+
+            Stats.update();
+            Controls.update();
+            Renderer.render(Scene, Camera);
+        };*/
+
+    function animate() {
+        requestAnimationFrame( animate );
+        render();
+        Stats.update();
+        Controls.update();
+    }
+
+    function render() {
+
+        angle+=$.Speed;
+        //Хоровод
+        /*for (var i=0; i<n; i++){
+            Cubes[i].position.z = Math.sin (2*Math.PI/n*i+angle)*$.Radius/2;
+            Cubes[i].position.x = Math.cos (2*Math.PI/n*i+angle)*$.Radius/2;
+        }*/
+        // find intersections
+        Raycaster.setFromCamera( Mouse, Camera );
+        var intersects = Raycaster.intersectObjects( Cubes );
+        if ( intersects.length > 0 ) {
+            if ( INTERSECTED != intersects[ 0 ].object ) {
+                    if ( INTERSECTED )
+                    {
+
+                    }
+                        //INTERSECTED.material.color.setHex( INTERSECTED.currentHex );
+                INTERSECTED = intersects[ 0 ].object;
+                INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
+                INTERSECTED.material.color.setHex( 0xff0000 );
+            }
+        } else {
+            if ( INTERSECTED ) INTERSECTED.material.color.setHex( INTERSECTED.currentHex );
+            INTERSECTED = null;
+        }
+        Renderer.render( Scene, Camera );
+    }
+
+
+</script>
+</body>
