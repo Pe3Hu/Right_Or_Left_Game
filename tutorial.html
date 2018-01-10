@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Left or Right</title>
+    <style>
+        body { margin: 0; }
+        canvas { width: 100%; height: 100% }
+    </style>
+</head>
+<body>
+<script src="../libraries/three.js-r87/build/three.min.js"></script>
+<script src="../libraries/three.js-r87/src/helpers/AxisHelper.js"> </script>
+<script src="../libraries/three.js-r87/examples/js/libs/stats.min.js"></script>
+<script src="../libraries/three.js-r87/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+
+    var Camera, Scene, Renderer, Container, Stats, AxisHelper,
+        Mouse = new THREE.Vector2(), Vector0 = new THREE.Vector3(0,0,0);
+    var n = 7, center = 0, move_cubes = 0, baffle_status = 0, move_baffle = 0, animate_speed = 0.1,
+        StatusField = 0, angle = 0, rotate_speed = Math.PI / 720, start_game = false, draw = false,
+        camera_position ={
+            x: 0,
+            y: 0,
+            z: 10
+        }, c_c ={
+            x: 1,
+            y: 1,
+            z: 1
+        }, f_c = {
+            x: 5,
+            y: 0.5  ,
+            z: n
+        }, b_c = {
+            x: 0.5,
+            y: 1,
+            z: n
+        };
+
+    //Массив кубов, поле
+    var Cubes = [], MoveCubes = [], StatusCubes = [], Field, Baffle;
+
+    init();
+    animate();
+
+    function init() {
+
+        Container = document.createElement( 'div' );
+        document.body.appendChild( Container );
+
+        Camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+        Camera.position.set(camera_position.x, camera_position.y, camera_position.z);
+        Camera.lookAt(Vector0);
+        Controls = new THREE.OrbitControls( Camera );
+
+        Scene = new THREE.Scene();
+        Scene.background = new THREE.Color( 0xf0f0f0 );
+        AxisHelper = new THREE.AxisHelper( 5 );
+        Scene.add( AxisHelper );
+        var Light = new THREE.DirectionalLight( 0xffffff  , 1 );
+        Light.position.set( 1, 1, 1 ).normalize();
+        Scene.add( Light );
+
+        var Colors = [ new THREE.Color(0xF4C430),
+            new THREE.Color(0xC8A2C8),
+            new THREE.Color(0x007FFF),
+            new THREE.Color(0x3B005C),
+            new THREE.Color(0x00A86B),
+            new THREE.Color(0xDC143C)];
+        var BaffleGeometry = new THREE.BoxGeometry( b_c.x, b_c.y, b_c.z );
+        var BaffleMaterial = new THREE.MeshBasicMaterial( {color: 0x00ffff, side: THREE.DoubleSide} );
+        Baffle = new THREE.Mesh( BaffleGeometry, BaffleMaterial );
+        Baffle.position.y +=b_c.y/2+c_c.y;
+        var FieldGeometry = new THREE.BoxGeometry( f_c.x, f_c.y, f_c.z );
+        var FieldMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff, side: THREE.DoubleSide} );
+        Field = new THREE.Mesh( FieldGeometry, FieldMaterial );
+        Field.position.y -=f_c.y/2;
+        Scene.add( Field );
+        Scene.add( Baffle );
+        for (var i=0; i<n; i++) {
+            Cubes.push(new THREE.Mesh(new THREE.BoxGeometry( c_c.x, c_c.y, c_c.z ),
+                new THREE.MeshLambertMaterial( { color: Colors[i%6] } )));
+            Cubes[i].position.z = -n/2 + i + c_c.z/2 ;
+            Cubes[i].position.y += c_c.y/2;
+            var way = Math.random();
+            if (way < 0.5) way = -1;
+                else way =1;
+            MoveCubes.push(way);
+            StatusCubes.push(0);
+            Scene.add(Cubes[i]);
+        }
+
+        Raycaster = new THREE.Raycaster();
+
+        Renderer = new THREE.WebGLRenderer({antialias: true});
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+        Renderer.setPixelRatio( window.devicePixelRatio );
+        Container.appendChild( Renderer.domElement );
+
+        Stats = new Stats();
+        Container.appendChild( Stats.dom);
+
+        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        window.addEventListener( 'keydown', onWindowKeyDown, false );
+    }
+
+    function onWindowResize() {
+        Camera.aspect = window.innerWidth / window.innerHeight;
+        Camera.updateProjectionMatrix();
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    function onWindowKeyDown( event ) {
+        event.preventDefault();
+        if (event.keyCode == 82)//r
+        {
+            start_game = true;
+        }
+        if (event.keyCode == 81)//q
+        {
+            move_cubes = -1;
+        }
+        if (event.keyCode == 32)//space
+        {
+            move_cubes = 0;
+        }
+        if (event.keyCode == 69)//e
+        {
+            move_cubes = 1;
+        }
+        if (event.keyCode == 87)//w
+        {
+            if (center!=0)
+                move_baffle = 1;
+        }
+        if (event.keyCode == 83)//s
+        {
+            if (center!=0)
+                move_baffle = -1;
+        }
+        if (event.keyCode == 65)//a
+        {
+            if (baffle_status==-1)
+                move_baffle = -1;
+        }
+        if (event.keyCode == 68)//d
+        {
+            if (center!=0)
+                move_baffle = -1;
+        }
+    }
+
+    function onDocumentMouseMove( event ) {
+        event.preventDefault();
+        Mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+        Mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+    }
+
+    function animate() {
+        requestAnimationFrame( animate );
+        render();
+        Stats.update();
+        Controls.update();
+    }
+
+    function render() {
+        if (start_game && StatusField == 0 && !draw)
+        {
+            for (var i=0; i<n; i++) {
+                if (Cubes[i].position.x - c_c.x / 2 < -f_c.x / 2 ||
+                    Cubes[i].position.x + c_c.x / 2 > f_c.x / 2)
+                    StatusCubes[i] = MoveCubes[i];
+                if (StatusCubes[i] == 0)
+                    Cubes[i].position.x += MoveCubes[i] * animate_speed;
+                else StatusField += StatusCubes[i];
+            }
+            if  (StatusCubes[0] != 0 && StatusField == 0)
+                draw = true;
+        }
+/*        if (baffle_status==-1 && angle*StatusField < Math.PI / 4)
+        {
+            angle+=rotate_speed*StatusField;
+            Field.rotation.z = angle;
+            Baffle.rotation.z = angle;
+            for (var i=0; i<n; i++)
+                Cubes[i].rotation.z = angle;
+
+            var v, v_l, v_prev;
+            for (var i=0; i<n; i++) {
+                v = Cubes[i].position;
+                v_l=v.length();
+                v_prev = v_l;
+                v.normalize();
+                Cubes[i].translateOnAxis (v, v_l);
+                Cubes[i].position.normalize();
+                Cubes[i].position.multiplyScalar(v_prev);
+            }
+            v = Baffle.position;
+            v_l=v.length();
+            v.normalize();
+            Baffle.translateOnAxis (v, v_l);
+        }*/
+
+
+
+        if (move_cubes < 0 && center != -1 )
+            for (var i=0; i<n; i++) {
+                Cubes[i].position.x -= animate_speed;
+                if (Cubes[i].position.x - c_c.x/2 < -f_c.x/2)
+                    center = -1;
+            }
+        if (move_cubes > 0 && center != 1 )
+            for (var i=0; i<n; i++) {
+                Cubes[i].position.x += animate_speed;
+                if (Cubes[i].position.x + c_c.x / 2 > f_c.x / 2)
+                    center = 1;
+            }
+
+
+        if (center != 0 || StatusField!=0)
+            move_baffle = -1;
+        if (move_baffle == -1 && baffle_status != -1)
+            Baffle.position.y -= animate_speed;
+        if (Baffle.position.y - b_c.y/2 < f_c.y/2 + Field.position.y)
+            baffle_status = -1;
+        //if(center == -1 && baffle_status == -1)
+
+
+            Renderer.render( Scene, Camera );
+    }
+</script>
+</body>
