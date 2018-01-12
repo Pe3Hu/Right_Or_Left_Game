@@ -14,28 +14,27 @@
 <script src="../libraries/three.js-r87/examples/js/controls/OrbitControls.js"></script>
 
 <script>
-
-    var Camera, Scene, Renderer, Container, Stats, AxisHelper,
+    var Camera, Scene, Renderer, Container, Stats, AxisHelper, 
         Mouse = new THREE.Vector2(), Vector0 = new THREE.Vector3(0,0,0);
-    var n = 7, center = 0, move_cubes = 0, baffle_status = 0, move_baffle = 0, animate_speed = 0.1,
-        StatusField = 0, angle = 0, rotate_speed = Math.PI / 720, start_game = false, draw = false,
-        camera_position ={
-            x: 0,
-            y: 0,
-            z: 10
+    var n= 100, camera_position ={
+            x: 0    ,
+            y: n/2,
+            z: n/2
         }, c_c ={
             x: 1,
             y: 1,
             z: 1
         }, f_c = {
-            x: 5,
-            y: 0.5  ,
+            x: n*c_c.x/2,
+            y: c_c.y/2  ,
             z: n
         }, b_c = {
-            x: 0.5,
-            y: 1,
+            x: c_c.x/2,
+            y: c_c.y,
             z: n
-        };
+        }, center = 0, move_cubes = 0, baffle_status = 0, move_baffle = 0, animate_speed = f_c.x/200,
+        rotate_speed = Math.PI / 720, fall_speed = c_c.x/20, angle = 0, status_field = null, overweight = 0,
+        on_edge = 0, start_round = false, draw = false;
 
     //Массив кубов, поле
     var Cubes = [], MoveCubes = [], StatusCubes = [], Field, Baffle;
@@ -90,8 +89,6 @@
             Scene.add(Cubes[i]);
         }
 
-        Raycaster = new THREE.Raycaster();
-
         Renderer = new THREE.WebGLRenderer({antialias: true});
         Renderer.setSize( window.innerWidth, window.innerHeight );
         Renderer.setPixelRatio( window.devicePixelRatio );
@@ -117,7 +114,7 @@
         event.preventDefault();
         if (event.keyCode == 82)//r
         {
-            start_game = true;
+            start_round = true;
         }
         if (event.keyCode == 81)//q
         {
@@ -165,47 +162,59 @@
         Stats.update();
         Controls.update();
     }
-
+    
     function render() {
-        if (start_game && StatusField == 0 && !draw)
+        //начало раунда
+        if (start_round &&  overweight  == 0 && !draw)
         {
             for (var i=0; i<n; i++) {
-                if (Cubes[i].position.x - c_c.x / 2 < -f_c.x / 2 ||
-                    Cubes[i].position.x + c_c.x / 2 > f_c.x / 2)
+                if (Cubes[i].position.x - c_c.x / 2 - animate_speed <= -f_c.x / 2 ||
+                    Cubes[i].position.x + c_c.x / 2 + animate_speed >= f_c.x / 2)
                     StatusCubes[i] = MoveCubes[i];
                 if (StatusCubes[i] == 0)
                     Cubes[i].position.x += MoveCubes[i] * animate_speed;
-                else StatusField += StatusCubes[i];
+                else overweight += StatusCubes[i];                
             }
-            if  (StatusCubes[0] != 0 && StatusField == 0)
+            //проверка на равномерное разделение
+            if  (StatusCubes[0] != 0 && overweight == 0)
                 draw = true;
+            if (overweight > 0) 
+                status_field = 1;
+            else 
+                status_field = -1;   
         }
-/*        if (baffle_status==-1 && angle*StatusField < Math.PI / 4)
-        {
-            angle+=rotate_speed*StatusField;
-            Field.rotation.z = angle;
-            Baffle.rotation.z = angle;
-            for (var i=0; i<n; i++)
-                Cubes[i].rotation.z = angle;
-
-            var v, v_l, v_prev;
-            for (var i=0; i<n; i++) {
-                v = Cubes[i].position;
-                v_l=v.length();
-                v_prev = v_l;
-                v.normalize();
-                Cubes[i].translateOnAxis (v, v_l);
-                Cubes[i].position.normalize();
-                Cubes[i].position.multiplyScalar(v_prev);
+        if (baffle_status==-1){
+            //отступ от края            
+            if (on_edge < c_c.x/2)
+                    on_edge += animate_speed;
+            else 
+                for (var i=0; i<n; i++)                  
+                    if (status_field == StatusCubes[i])                  
+                        StatusCubes[i] += status_field;
+            //поворот поля
+            if (Math.abs(angle / rotate_speed)  <= 100){
+                angle -= rotate_speed*status_field;
+                Scene.rotation.z = angle;                                 
             }
-            v = Baffle.position;
-            v_l=v.length();
-            v.normalize();
-            Baffle.translateOnAxis (v, v_l);
-        }*/
-
-
-
+            for (var i=0; i<n; i++){
+                if (1 == Math.abs(StatusCubes[i]))                    
+                        Cubes[i].position.x += status_field * animate_speed;                
+                //движение меньшества  
+                if (Cubes[i].position.x - c_c.x / 2  <= b_c.x / 2 &&
+                    Cubes[i].position.x + c_c.x / 2  >= -b_c.x / 2)
+                    StatusCubes[i] -= status_field;
+                //падение большинства
+                if (2 * status_field == StatusCubes[i])           
+                    {                 
+                        j=+2*fall_speed;
+                        Cubes[i].rotation.z += -status_field * rotate_speed * 5;
+                        Cubes[i].position.x += status_field * j;  
+                        Cubes[i].position.y += -2 * (Math.exp(j)- Math.exp(j-fall_speed));                
+                    }
+            }   
+        }                       
+    
+        //движение всех кубов
         if (move_cubes < 0 && center != -1 )
             for (var i=0; i<n; i++) {
                 Cubes[i].position.x -= animate_speed;
@@ -218,18 +227,14 @@
                 if (Cubes[i].position.x + c_c.x / 2 > f_c.x / 2)
                     center = 1;
             }
-
-
-        if (center != 0 || StatusField!=0)
+        //движение перегордки
+        if (center != 0 || overweight  != 0)
             move_baffle = -1;
         if (move_baffle == -1 && baffle_status != -1)
             Baffle.position.y -= animate_speed;
         if (Baffle.position.y - b_c.y/2 < f_c.y/2 + Field.position.y)
             baffle_status = -1;
-        //if(center == -1 && baffle_status == -1)
-
-
-            Renderer.render( Scene, Camera );
+        Renderer.render( Scene, Camera );            
     }
 </script>
 </body>
