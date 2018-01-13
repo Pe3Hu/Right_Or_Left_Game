@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tutorial</title>
+    <style>
+        body { margin: 0; }
+        canvas { width: 100%; height: 100% }
+    </style>
+</head>
+<body>
+<script src="../libraries/three.js-r87/build/three.min.js"></script>
+<script src="../libraries/three.js-r87/src/helpers/AxisHelper.js"> </script>
+<script src="../libraries/three.js-r87/examples/js/libs/stats.min.js"></script>
+<script src="../libraries/three.js-r87/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    "use strict";
+    function Block(mesh, move_x, move_y) {
+        this.mesh = mesh;
+        this.move_x = move_x;
+        this.move_y = move_y;
+        this.move_z = 0;
+        this.status = 0;
+    }
+
+    var Camera, Scene, Renderer, Container, Stats, AxisHelper, Controls,
+        Mouse = new THREE.Vector2(), Vector0 = new THREE.Vector3(0,0,0);
+    var n= 100, camera_position ={
+            x: 0,
+            y: 0,//n/2,
+            z: n*0.8
+        }, c_c ={
+            x: 1,
+            y: 1,
+            z: 1
+        }, f_c = {
+            x: n*c_c.x/2,
+            y: c_c.y/2,
+            z: n
+        }, b_c = {
+            x: c_c.x/2,
+            y: c_c.y,
+            z: n
+        }, animate_speed = f_c.x/200, rotate_speed = Math.PI / 720, fall_speed = c_c.x/20,
+        fall_position = 0, angle = 0, overweight = 0, on_edge = 0,
+        begin_round = false, middle_round = false, end_round = false, draw = false;
+
+    //Массив кубов, поле, перегородка
+    var Cubes = [], DropedCubes = [], Field, Baffle;
+
+    init();
+    animate();
+
+
+    function init() {
+        Container = document.createElement( 'div' );
+        document.body.appendChild( Container );
+
+        Camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+        Camera.position.set(camera_position.x, camera_position.y, camera_position.z);
+        Camera.lookAt(Vector0);
+        Controls = new THREE.OrbitControls( Camera );
+
+        Scene = new THREE.Scene();
+        Scene.background = new THREE.Color( 0xf0f0f0 );
+        AxisHelper = new THREE.AxisHelper( 5 );
+        Scene.add( AxisHelper );
+        var Light = new THREE.DirectionalLight( 0xffffff  , 1 );
+        Light.position.set( 1, 1, 1 ).normalize();
+        Scene.add( Light );
+
+        var Colors = [ new THREE.Color(0xF4C430),
+            new THREE.Color(0xC8A2C8),
+            new THREE.Color(0x007FFF),
+            new THREE.Color(0x3B005C),
+            new THREE.Color(0x00A86B),
+            new THREE.Color(0xDC143C)];
+        var BaffleGeometry = new THREE.BoxGeometry( b_c.x, b_c.y, b_c.z );
+        var BaffleMaterial = new THREE.MeshBasicMaterial( {color: 0x00ffff, side: THREE.DoubleSide} );
+        Baffle = new Block(new THREE.Mesh( BaffleGeometry, BaffleMaterial ), 0, 0);
+        Baffle.mesh.position.y += b_c.y/2 + c_c.y;
+        var FieldGeometry = new THREE.BoxGeometry( f_c.x, f_c.y, f_c.z );
+        var FieldMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff, side: THREE.DoubleSide} );
+        Field = new Block(new THREE.Mesh( FieldGeometry, FieldMaterial ), 0, 0);
+        Field.mesh.position.y -= f_c.y/2;
+        Scene.add( Field.mesh );
+        Scene.add( Baffle.mesh );
+        for (var i=0; i<n; i++) {
+            var way = Math.random();
+            if (way < 0.5) way = -1;
+            else way =1;
+            Cubes.push(new Block(new THREE.Mesh(new THREE.BoxGeometry( c_c.x, c_c.y, c_c.z ),
+                new THREE.MeshLambertMaterial( { color: Colors[i%6] } )), way, 0));
+            Cubes[i].mesh.position.z = -n/2 + i + c_c.z/2 ;
+            Cubes[i].mesh.position.y += c_c.y/2;
+            Scene.add(Cubes[i].mesh);
+        }
+
+        Renderer = new THREE.WebGLRenderer({antialias: true});
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+        Renderer.setPixelRatio( window.devicePixelRatio );
+        Container.appendChild( Renderer.domElement );
+
+        Stats = new Stats();
+        Container.appendChild( Stats.dom);
+
+        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        window.addEventListener( 'keydown', onWindowKeyDown, false );
+    }
+
+    function onWindowResize() {
+        Camera.aspect = window.innerWidth / window.innerHeight;
+        Camera.updateProjectionMatrix();
+        Renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    function onWindowKeyDown( event ) {
+        event.preventDefault();
+        if (event.keyCode == 32)//space
+        {
+            begin_round = true;
+        }
+    }
+
+    function onDocumentMouseMove( event ) {
+        event.preventDefault();
+        Mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+        Mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+    }
+
+    function animate() {
+        requestAnimationFrame( animate );
+        render();
+        Stats.update();
+        Controls.update();
+    }
+
+    //начало раунда
+    function init_round() {
+        if (begin_round &&  overweight  == 0 && !draw)
+        {
+            for (var i=0; i<Cubes.length; i++) {
+                if (Cubes[i].mesh.position.x - c_c.x / 2 - animate_speed <= -f_c.x / 2 ||
+                    Cubes[i].mesh.position.x + c_c.x / 2 + animate_speed >= f_c.x / 2)
+                    Cubes[i].status = Cubes[i].move;
+                if (Cubes[i].status == 0)
+                    Cubes[i].mesh.position.x += Cubes[i].move_x * animate_speed;
+                else overweight += Cubes[i].status;
+            }
+            //проверка на равномерное разделение
+            if  (Cubes[0].status != 0 && overweight == 0)
+                draw = true;
+            if (overweight > 0) {
+                Field.status = 1;
+                begin_round = false;
+                middle_round = true;
+            }
+            if (overweight < 0)
+            {
+                Field.status = -1;
+                begin_round = false;
+                middle_round = true;
+            }
+        }
+    }
+
+    //движение перегордки
+    function move_buffle() {
+        if (middle_round && Baffle.status != -1){
+            if (overweight  != 0)
+                Baffle.move_y = -1;
+            if (Baffle.move_y == -1 && Baffle.status != -1)
+                Baffle.mesh.position.y -= animate_speed;
+            if (Baffle.mesh.position.y - b_c.y/2 - animate_speed < f_c.y/2 + Field.mesh.position.y)
+                Baffle.status = -1;
+        }
+    }
+
+    function move_field() {
+        if (middle_round && Baffle.status == -1){
+            //отступ от края            
+            if (on_edge < c_c.x/2)
+                on_edge += animate_speed;
+            else
+                for (var i=Cubes.length-1; i>-1; i--)
+                    if (Field.status == Cubes[i].status){
+                        Cubes[i].status += Field.status;
+                        DropedCubes.push(Cubes[i]);
+                        Cubes.splice(i, 1);
+                    }
+            //поворот поля
+            if (Math.abs(angle / rotate_speed)  <= 100){
+                angle -= rotate_speed*Field.status;
+                Scene.rotation.z = angle;
+            }
+            for (var i=0; i<Cubes.length; i++){
+                if (1 == Math.abs(Cubes[i].status))
+                    Cubes[i].mesh.position.x += Field.status * animate_speed;
+                //движение меньшества  
+                if (Cubes[i].mesh.position.x - c_c.x / 2  <= b_c.x / 2 &&
+                    Cubes[i].mesh.position.x + c_c.x / 2  >= -b_c.x / 2)
+                    Cubes[i].status -= Field.status;
+            }
+            if (Math.abs(Cubes[0].status) == 2){
+                end_round = true;
+                middle_round = false;
+            }
+        }
+    }
+
+    function drop_cubes() {
+        //падение большинства
+        for (var i=0; i<DropedCubes.length; i++){
+            fall_position=+2*fall_speed;
+            DropedCubes[i].mesh.rotation.z += -Field.status * rotate_speed * 5;
+            DropedCubes[i].mesh.position.x += Field.status * fall_position;
+            DropedCubes[i].mesh.position.y += -2 * (Math.exp(fall_position)- Math.exp(fall_position - fall_speed));
+        }
+    }
+
+    function clear_field() {
+        if (end_round){
+            if (Math.abs(angle / rotate_speed) > 1) {
+                angle += rotate_speed * Field.status;
+                Scene.rotation.z = angle;
+
+            }
+        }
+    }
+
+
+
+
+    function render() {init_round();
+        move_buffle();
+        move_field();
+        clear_field();
+        drop_cubes();
+        Renderer.render( Scene, Camera );
+    }
+</script>
+</body>
